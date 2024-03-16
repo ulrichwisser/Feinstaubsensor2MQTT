@@ -159,7 +159,7 @@ class mqttHandler():
 
     def init_mqtt(self):
         # print("init_mqtt")
-        self.mqttc = mqtt.Client()
+        self.mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         try:
             self.mqttc.username_pw_set(self.mqttUserId, self.mqttPassword)
             self.mqttc.connect(self.mqttServer, self.mqttPort)
