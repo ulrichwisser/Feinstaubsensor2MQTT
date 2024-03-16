@@ -1,0 +1,22 @@
+# HTTP Server 
+http_server:
+  ip: !ENV ${HTTP_IP:127.0.0.1}
+  port: !ENV tag:yaml.org,2002:int ${HTTP_PORT:8080}
+
+# MQTT
+mqtt:
+  server: !ENV ${MQTT_SERVER:127.0.0.1}
+  port: !ENV tag:yaml.org,2002:int ${MQTT_PORT:1883}
+  user: !ENV ${MQTT_USER}
+  password: !ENV ${MQTT_PASSWD}
+  # Complete Topic:
+  # >>> <prefix>/<topic>_<SensorID>/<Parameter> Value  
+  prefix: !ENV ${MQTT_PREFIX:tele}
+  topic: !ENV ${MQTT_TOPIC:luftsensor_}
+
+# Luftsensor ID or edit multiple IDs
+allowed_sensors: []
+
+# Logging 
+# possible values DEBUG, INFO, WARNING, ERROR, CRITICAL
+log_level: !ENV ${LOG_LEVEL:DEBUG}

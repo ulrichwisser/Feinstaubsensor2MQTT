@@ -38,60 +38,32 @@ import paho.mqtt.client as mqtt
 import json
 import logging
 from logging.handlers import RotatingFileHandler
+from pyaml_env import parse_config, BaseConfig
 
 class myHTTP_2_MQTT_Pushlisher():
-    def __init__(self, MQTT):
-        ############################################
-        # Edit HTTP Server Port and IP here
-        ############################################
-        port = 8080
-        IP = '127.0.0.1'
+    def __init__(self, config, MQTT):
         try:
-            server = HTTPServer((IP, port), RequestHandler)
+            server = HTTPServer((config.http_server.ip, config.http_server.port), RequestHandler)
             server.mqtt = MQTT
-            server.mqtt.app_log.info('Listening HTTP on %s:%s' % (IP, port))
+            server.mqtt.app_log.info('Listening HTTP on %s:%s' % (config.http_server.ip, config.http_server.port))
             server.serve_forever()
         except Exception as e:
-            MQTT.app_log.error("Error: starting HTTP Server: %s, IP: %s, Port: %s" %(e, IP, port) )
+            MQTT.app_log.error("Error: starting HTTP Server: %s, IP: %s, Port: %s" %(e, config.http_server.ip, config.http_server.port) )
             exit()
 
 class main():
     def __init__(self):
-        ############################################
-        # Edit MQTT Server Port, IP, ID and PW here
-        ############################################
-        mqttServer = "127.0.0.1"
-        mqttUserId = ""
-        mqttPassword = ""
-        mqttPort = 1883
+        config = BaseConfig(parse_config('config.yaml', tag='!ENV'))
+        app_log = self.log(config)
+        print(config)
+        self.mqttH = mqttHandler(config, app_log)
+        self.server = myHTTP_2_MQTT_Pushlisher(config, self.mqttH)
 
-        ############################################
-        # Edit Luftsensor ID or edit multiple IDs
-        ############################################
-        AllowedIDs = ['1234567', '7654321']
-        Prefix = "tele"
-        Topic = "luftsensor_"
-        # Complete Topic:
-        # >>> tele/luftsensor_<SensorID>/<Parameter> Value
-        app_log = self.log()
-        self.mqttH = mqttHandler(mqttServer, mqttUserId, mqttPassword, mqttPort, AllowedIDs, Prefix, Topic, app_log)
-        self.server = myHTTP_2_MQTT_Pushlisher(self.mqttH)
-
-    def log(self):
-        log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
-
-        logFile = 'log.log'
-
-        logging_file_handler = RotatingFileHandler(logFile, mode='a', maxBytes=5 * 1024 * 1024,
-                                         backupCount=2, encoding=None, delay=0)
-        logging_file_handler.setFormatter(log_formatter)
-        logging_file_handler.setLevel(logging.INFO)
-
-        app_log = logging.getLogger('root')
-        app_log.setLevel(logging.INFO)
-
-        app_log.addHandler(logging_file_handler)
-        return app_log
+    def log(self, config):
+        logging.basicConfig(format='%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s', datefmt='%m/%d/%Y %H:%M:%S')
+        logger = logging.getLogger(__name__)
+        logger.setLevel(config.log_level)
+        return logger
 
 class RequestHandler(BaseHTTPRequestHandler):
 
@@ -142,15 +114,15 @@ class RequestHandler(BaseHTTPRequestHandler):
 
 
 class mqttHandler():
-    def __init__(self, mqttServer, mqttUserId, mqttPassword, mqttPort, AllowedIDs, Prefix, Topic, app_log):
-        self.mqttServer = mqttServer
-        self.mqttUserId = mqttUserId
-        self.mqttPassword = mqttPassword
-        self.mqttPort = mqttPort
+    def __init__(self, config, app_log):
+        self.mqttServer = config.mqtt.server
+        self.mqttUserId = config.mqtt.user
+        self.mqttPassword = config.mqtt.password
+        self.mqttPort = config.mqtt.port
 
-        self.AllowedIDs = AllowedIDs
-        self.Prefix = Prefix
-        self.Topic = Topic
+        self.AllowedIDs = config.allowed_sensors
+        self.Prefix = config.mqtt.prefix
+        self.Topic = config.mqtt.topic
 
         self.app_log = app_log
 
@@ -171,7 +143,7 @@ class mqttHandler():
 
     def mqttPublish(self, Topic, Value):
         # Publish to MQTT server
-        # print("mqttPublish", Topic, Value)
+        self.app_log.debug("mqttPublish %s %s " % (Topic, Value))
         self.mqttc.publish(Topic, Value)
 
     def read_all_data_from_sensor(self, parsed_json):
@@ -179,7 +151,7 @@ class mqttHandler():
         try:
 
             esp8266id = parsed_json["esp8266id"]
-            if esp8266id in self.AllowedIDs:
+            if not self.AllowedIDs or esp8266id in self.AllowedIDs:
                 # self.app_log.info("Known esp8266id:   ", esp8266id)
                 for each in parsed_json['sensordatavalues']:
                     if "pressure" in str(each['value_type']):
